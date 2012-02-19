@@ -474,3 +474,13 @@ imap <C-C> <Esc>:call SmartComment("normal")<CR>
 imap <C-F> <Esc>:call SmartUnComment("normal")<CR>
 vmap <C-C> :call SmartComment("visual")<CR>
 vmap <C-F> :call SmartUnComment("visual")<CR>
+
+" Autoparse comment strings at any relevant event
+if !exists("g:smartcomment_loaded")
+	let g:smartcomment_loaded = 0
+endif
+
+if g:smartcomment_loaded == 0
+	autocmd BufReadPost,FileType,Syntax,EncodingChanged * call ParseComments()
+endif
+let g:smartcomment_loaded = 1
