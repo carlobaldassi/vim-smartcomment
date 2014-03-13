@@ -16,19 +16,19 @@ Once installed, it adds two mappings:
 It tries to recognize the commenting style from the file type (looking at the
 ViM options '&comments' and '&commentstring').
 
-Comment delimiters are divided between unary (e.g. `//` in C++), which act until the
-end of a line, and ternary (i.e. open, middle and close, e.g. `/*`, `*`, `*/` in C++),
-which can span (possibily multi-line) regions.
+Comment delimiters are divided between line-comments (e.g. `//` in C++), which
+act until the end of a line, and range-comments (e.g. `/*`, `*/` in C++), which
+can span (possibily multi-line) regions.
 
-When invoked in visual mode, SmartComment tries to comment out the selected portion of text.
-Otherwise, it comments out a whole line.
+When invoked in visual mode, SmartComment tries to comment out the selected
+portion of text. Otherwise, it comments out a whole line.
 
 Its 'smartest' feature is that it tries to avoid nested comments.
 
 In case the automatic recognition fails, comment delimiters can be set manually,
 e.g. in C/C++:
 ```vim
-:call SetCommentVars(['//'], ['/*', '*', '*/'])
+:call SetCommentVars('//', ['/*', '*/'])
 ```
 
 ## Known issues
