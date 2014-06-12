@@ -414,12 +414,12 @@ function! UnCommentRange() range
 endfunction
 
 " Key mappings
-nmap <C-C> :call SmartComment("normal")<CR>
-nmap <C-F> :call SmartUnComment("normal")<CR>
-imap <C-C> <Esc>:call SmartComment("normal")<CR>
-imap <C-F> <Esc>:call SmartUnComment("normal")<CR>
-vmap <C-C> :call SmartComment("visual")<CR>
-vmap <C-F> :call SmartUnComment("visual")<CR>
+nnoremap <C-C> :call SmartComment("normal")<CR>
+nnoremap <C-F> :call SmartUnComment("normal")<CR>
+inoremap <C-C> <Esc>:call SmartComment("normal")<CR>i
+inoremap <C-F> <Esc>:call SmartUnComment("normal")<CR>i
+vnoremap <C-C> :call SmartComment("visual")<CR>
+vnoremap <C-F> :call SmartUnComment("visual")<CR>
 "vmap <C-C> :call SmartComment("normal")<CR>
 "vmap <C-F> :call SmartUnComment("normal")<CR>
 
