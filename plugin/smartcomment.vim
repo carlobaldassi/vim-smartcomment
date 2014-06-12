@@ -116,7 +116,7 @@ function! SmartComment(mode) range
     if len(b:line_comments) == 0 && len(b:range_comments) == 0
         return
     end
-    if a:mode == "normal" || len(b:range_comments) == 0
+    if a:mode == "normal" || len(b:range_comments) == 0 || len(b:range_comments[1]) == 0
         exec a:firstline . "," . a:lastline . "call CommentLine()"
     elseif a:mode == "visual"
         exec a:firstline . "," . a:lastline . "call CommentRange()"
