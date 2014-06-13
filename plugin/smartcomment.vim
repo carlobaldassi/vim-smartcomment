@@ -116,22 +116,28 @@ function! SmartComment(mode) range
     if len(b:line_comments) == 0 && len(b:range_comments) == 0
         return
     end
+    let save_cur = getpos('.')
     if a:mode == "normal" || len(b:range_comments) == 0 || len(b:range_comments[1]) == 0
         exec a:firstline . "," . a:lastline . "call CommentLine()"
     elseif a:mode == "visual"
         exec a:firstline . "," . a:lastline . "call CommentRange()"
     endif
+    call setpos('.', save_cur)
+    return ''
 endfunction
 
 function! SmartUnComment(mode) range
     if len(b:line_comments) == 0 && len(b:range_comments) == 0
         return
     end
+    let save_cur = getpos('.')
     if a:mode == "normal" || len(b:range_comments) == 0 || len(b:range_comments[1]) == 0
         exec a:firstline . "," . a:lastline . "call UnCommentLine()"
     elseif a:mode == "visual"
         exec a:firstline . "," . a:lastline . "call UnCommentRange()"
     endif
+    call setpos('.', save_cur)
+    return ''
 endfunction
 
 function! CommentLine()
@@ -139,20 +145,16 @@ function! CommentLine()
         echohl WarningMsg | echo "CommentLine: failed: file is read-only" | echohl None
         return
     endif
-    let s:cleft = "/*"
-    let s:cright = "*/"
+    let cleft = "/*"
+    let cright = "*/"
     if len(b:line_comments) > 0
-        let s:cleft = b:line_comments
-        let s:cright = ""
+        let cleft = b:line_comments
+        let cright = ""
     elseif len(b:three_comments) > 0
-        let s:cleft = b:range_comments[0]
-        let s:cright = b:range_comments[1]
+        let cleft = b:range_comments[0]
+        let cright = b:range_comments[1]
     endif
-    let s:lcommand = "I" . s:cleft
-    let s:rcommand = "A" . s:cright
-    exec "normal " . s:lcommand
-    exec "normal " . s:rcommand
-    normal ^
+    call setline('.', substitute(getline('.'), '^\(\s*\)\(.*\)\(\s*\)$', '\1' . cleft . '\2' . cright . '\3', ''))
 endfunction
 
 function! CommentRange() range
@@ -277,24 +279,21 @@ function! UnCommentLine()
         echohl WarningMsg | echo "UnCommentLine: failed: file is read-only" | echohl None
         return
     endif
-    let s:report_bk = &report
-    setlocal report=100000000
 
-    let s:cleft = "/*"
-    let s:cright = "*/"
+    let cleft = "/*"
+    let cright = "*/"
     if len(b:line_comments) > 0
-        let s:cleft = b:line_comments
-        let s:cright = ""
+        let cleft = b:line_comments
+        let cright = ""
     elseif len(b:three_comments) > 0
-        let s:cleft = b:range_comments[0]
-        let s:cright = b:range_comments[1]
+        let cleft = b:range_comments[0]
+        let cright = b:range_comments[1]
     endif
 
-    let s:ecleft = escape(s:cleft, '*@\')
-    let s:ecright = escape(s:cright, '*@\')
+    let ecleft = escape(cleft, '*@\')
+    let ecright = escape(cright, '*@\')
 
-    exec "s@^\\([[:space:]]*\\)" . s:ecleft . "\\(.*\\)[[:space:]]*" . s:ecright . "[[:space:]]*$@\\1\\2@e"
-    exec "setlocal report=" . s:report_bk
+    call setline('.', substitute(getline('.'), '^\(\s*\)' . ecleft . '\(.*\)\s*' . ecright . '\(\s*\)$', '\1\2\3', ''))
 endfunction
 
 function! UnCommentRange() range
@@ -416,8 +415,8 @@ endfunction
 " Key mappings
 nnoremap <C-C> :call SmartComment("normal")<CR>
 nnoremap <C-F> :call SmartUnComment("normal")<CR>
-inoremap <C-C> <Esc>:call SmartComment("normal")<CR>i
-inoremap <C-F> <Esc>:call SmartUnComment("normal")<CR>i
+inoremap <C-C> <C-R>=SmartComment("normal")<CR>
+inoremap <C-F> <C-R>=SmartUnComment("normal")<CR>
 vnoremap <C-C> :call SmartComment("visual")<CR>
 vnoremap <C-F> :call SmartUnComment("visual")<CR>
 "vmap <C-C> :call SmartComment("normal")<CR>
