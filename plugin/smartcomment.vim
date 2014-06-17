@@ -150,11 +150,24 @@ function! CommentLine()
     if len(b:line_comments) > 0
         let cleft = b:line_comments
         let cright = ""
-    elseif len(b:three_comments) > 0
+    elseif len(b:range_comments) > 0
         let cleft = b:range_comments[0]
         let cright = b:range_comments[1]
     endif
     call setline('.', substitute(getline('.'), '^\(\s*\)\(.*\)\(\s*\)$', '\1' . cleft . '\2' . cright . '\3', ''))
+endfunction
+
+function! s:isincomment(l, c, delim)
+    if match(getline(a:l), a:delim) != -1
+        return 0
+    endif
+    let stack = synstack(a:l, a:c)
+    for s in stack
+        if synIDattr(s, 'name') =~? 'comment'
+            return 1
+        endif
+    endfor
+    return 0
 endfunction
 
 function! CommentRange() range
@@ -162,116 +175,92 @@ function! CommentRange() range
         echohl WarningMsg | echo "CommentRange: failed: file is read-only" | echohl None
         return
     endif
-    let s:report_bk = &report
-    let s:cindent_bk = &cindent
-    let s:smartindent_bk = &smartindent
-    let s:autoindent_bk = &autoindent
-    let s:indentexpr_bk = &indentexpr
-    let s:comments_bk = &comments
-    setlocal report=100000000
-    setlocal nocindent
-    setlocal nosmartindent
-    setlocal noautoindent
-    setlocal indentexpr=""
-    setlocal comments=""
+
     if len(b:range_comments) > 0
-        let s:cleft = b:range_comments[0]
-        let s:cright = b:range_comments[1]
+        let cleft = b:range_comments[0]
+        let cright = b:range_comments[1]
 
-        let s:ecleft = escape(s:cleft, '*@\')
-        let s:ecright = escape(s:cright, '*@\')
+        let ecleft = escape(cleft, '*\.^$')
+        let ecright = escape(cright, '*\.^$')
 
-        "let s:mode = visualmode()
+        let pos1 = getpos("'<")
+        let pos2 = getpos("'>")
 
-        let s:pos1 = getpos("'<")
-        let s:pos2 = getpos("'>")
-
-        if ((s:pos1[1] > s:pos2[1]) || ((s:pos1[1] == s:pos2[1]) && (s:pos1[2] > s:pos2[2])))
-            s:tmp = s:pos1
-            s:pos1 = s:pos2
-            s:pos2 = s:tmp
+        if ((pos1[1] > pos2[1]) || ((pos1[1] == pos2[1]) && (pos1[2] > pos2[2])))
+            tmp = pos1
+            pos1 = pos2
+            pos2 = tmp
         endif
 
-        call setpos(".", s:pos1)
-        let s:ml1 = searchpos(s:ecright, "c", a:lastline)
-        if s:ml1[0] == a:lastline && s:ml1[1] > s:pos2[2]
-            let s:ml1 = [0,0]
+        if pos1[1] != a:firstline
+            echohl ErrorMsg | echo "CommentRange: failed: firstline=" . a:firstline . " pos1=" . pos1[1] | echohl None
+            return
+        endif
+        if pos2[1] != a:lastline
+            echohl ErrorMsg | echo "CommentRange: failed: lastline=" . a:lastline . " pos2=" . pos2[1] | echohl None
+            return
         endif
 
-        call setpos(".", s:pos2)
-        let s:ml2 = searchpos(s:ecright, "cb", a:firstline)
-        if s:ml2[0] == a:firstline && s:ml2[1] < s:pos1[2]
-            let s:ml2 = [0,0]
+        let ecl = '\%' . pos1[2] . 'c'
+        let ecr = '\%' . (pos2[2]+1) . 'c'
+
+        let isincommentl = s:isincomment(pos1[1], pos1[2], ecl . ecleft)
+        let isincommentr = s:isincomment(pos2[1], pos2[2], ecright . ecr)
+
+        if !isincommentl
+            let cl = cleft
+        else
+            let cl = cright . cleft
+        endif
+        if !isincommentr
+            let cr = cright
+        else
+            let cr = cright . cleft
         endif
 
-        call setpos(".", s:pos1)
-        let s:mr1 = searchpos(s:ecleft, "c", a:lastline)
-        if s:mr1[0] == a:lastline && s:mr1[1] > s:pos2[2]
-            let s:mr1 = [0,0]
-        endif
-
-        call setpos(".", s:pos2)
-        let s:mr2 = searchpos(s:ecleft, "cb", a:firstline)
-        if s:mr2[0] == a:firstline && s:mr2[1] < s:pos1[2]
-            let s:mr2 = [0,0]
-        endif
-
-        let s:closeleft = ""
-        let s:closeright = ""
-        if s:ml1 != [0, 0] && s:mr1 != [0, 0]
-            if s:ml1[0] < s:mr1[0] || ( s:ml1[0] == s:mr1[0] && s:ml1[1] < s:mr1[1] )
-                let s:closeleft = s:cright
+        if a:firstline == a:lastline
+            let la = getline(a:firstline)
+            if pos1[2] >= 2
+                let ll = la[0 : pos1[2]-2]
+            else
+                let ll = ''
             endif
-            if s:ml2[0] < s:mr2[0] || ( s:ml2[0] == s:mr2[0] && s:ml2[1] < s:mr2[1] )
-                let s:closeright = s:cleft
+            let lc = la[pos1[2]-1 : pos2[2]-1]
+            let lr = la[pos2[2] : -1]
+
+            let lc = substitute(lc, '\(' . ecleft . '\|' . ecright . '\)', cright . cleft, 'g')
+
+            call setline(a:firstline, ll . cl . lc . cr . lr)
+        else
+            let la = getline(a:firstline)
+            if pos1[2] >= 2
+                let ll = la[0 : pos1[2]-2]
+            else
+                let ll = ''
             endif
-        elseif s:ml1 != [0, 0] && s:mr1 == [0, 0]
-            let s:closeleft = s:cright
-        elseif s:ml1 == [0, 0] && s:mr1 != [0, 0]
-            let s:closeright = s:cleft
+            let lc = la[pos1[2]-1 : -1]
+
+            let lc = substitute(lc, '\(' . ecleft . '\|' . ecright . '\)', cright . cleft, 'g')
+            call setline(a:firstline, ll . cl . lc)
+
+            for l in range(a:firstline+1, a:lastline-1)
+                call setline(l, substitute(getline(l), '\(' . ecleft . '\|' . ecright . '\)', cright . cleft, 'g'))
+            endfor
+
+            let la = getline(a:lastline)
+            let lc = la[0 : pos2[2]-1]
+            let lr = la[pos2[2] : -1]
+
+            let lc = substitute(lc, '\(' . ecleft . '\|' . ecright . '\)', cright . cleft, 'g')
+
+            call setline(a:lastline, lc . cr . lr)
         endif
-
-        let s:rcommand = "a\<CR>" . s:cright . s:closeright
-
-        call setpos(".", s:pos2)
-        exec "normal " . s:rcommand
-
-        let s:lcommand = "i" . s:closeleft . s:cleft . "\<CR>"
-
-        call setpos(".", s:pos1)
-        if (visualmode() == "V")
-            normal ^
-        endif
-        exec "normal " . s:lcommand
-
-        exec (a:firstline + 1) . "," . (a:lastline + 1) . "s@\\(" . s:ecleft . "\\|" . s:ecright . "\\)@" . s:ecright . s:ecleft . "@ge"
-
-        exec ":" . a:firstline
-        exec "normal gJ"
-
-        exec ":" . a:lastline
-        exec "normal gJ"
-
     elseif len(b:line_comments) > 0
-        let s:cleft = b:line_comments
-        let s:lcommand = "I" . s:cleft
-        for s:l in range(a:firstline, a:lastline)
-            exec ": " . s:l
-            exec "normal " . s:lcommand
+        for l in range(a:firstline, a:lastline)
+            setpos(l, 0)
+            call CommenLine()
         endfor
     endif
-    exec "setlocal report=" . s:report_bk
-    if s:cindent_bk == 1
-        setlocal cindent
-    endif
-    if s:smartindent_bk == 1
-        setlocal smartindent
-    endif
-    if s:autoindent_bk == 1
-        setlocal autoindent
-    endif
-    exec "setlocal indentexpr=" . s:indentexpr_bk
-    exec "setlocal comments=" . escape(s:comments_bk, '* -\\|"')
 endfunction
 
 function! UnCommentLine()
@@ -285,13 +274,13 @@ function! UnCommentLine()
     if len(b:line_comments) > 0
         let cleft = b:line_comments
         let cright = ""
-    elseif len(b:three_comments) > 0
+    elseif len(b:range_comments) > 0
         let cleft = b:range_comments[0]
         let cright = b:range_comments[1]
     endif
 
-    let ecleft = escape(cleft, '*@\')
-    let ecright = escape(cright, '*@\')
+    let ecleft = escape(cleft, '*\.^$')
+    let ecright = escape(cright, '*\.^$')
 
     call setline('.', substitute(getline('.'), '^\(\s*\)' . ecleft . '\(.*\)\s*' . ecright . '\(\s*\)$', '\1\2\3', ''))
 endfunction
@@ -301,115 +290,92 @@ function! UnCommentRange() range
         echohl WarningMsg | echo "UnCommentRange: failed: file is read-only" | echohl None
         return
     endif
-    let s:report_bk = &report
-    setlocal report=100000000
-    let s:cindent_bk = &cindent
-    let s:smartindent_bk = &smartindent
-    let s:autoindent_bk = &autoindent
-    let s:indentexpr_bk = &indentexpr
-    let s:comments_bk = &comments
-    setlocal report=100000000
-    setlocal nocindent
-    setlocal nosmartindent
-    setlocal noautoindent
-    setlocal indentexpr=""
-    setlocal comments=""
-    let s:cleft = "/*"
-    let s:cright = "*/"
     if len(b:range_comments) > 0
-        let s:cleft = b:range_comments[0]
-        let s:cright = b:range_comments[1]
+        let cleft = b:range_comments[0]
+        let cright = b:range_comments[1]
 
-        let s:ecleft = escape(s:cleft, '*@\')
-        let s:ecright = escape(s:cright, '*@\')
+        let ecleft = escape(cleft, '*\.^$')
+        let ecright = escape(cright, '*\.^$')
 
-        let s:pos1 = getpos("'<")
-        let s:pos2 = getpos("'>")
+        let pos1 = getpos("'<")
+        let pos2 = getpos("'>")
 
-        if ((s:pos1[1] > s:pos2[1]) || ((s:pos1[1] == s:pos2[1]) && (s:pos1[2] > s:pos2[2])))
-            s:tmp = s:pos1
-            s:pos1 = s:pos2
-            s:pos2 = s:tmp
+        if ((pos1[1] > pos2[1]) || ((pos1[1] == pos2[1]) && (pos1[2] > pos2[2])))
+            tmp = pos1
+            pos1 = pos2
+            pos2 = tmp
         endif
 
-        call setpos(".", s:pos1)
-        let s:ml1 = searchpos(s:ecright, "c", a:lastline)
-        if s:ml1[0] == a:lastline && s:ml1[1] > s:pos2[2]
-            let s:ml1 = [0,0]
+        if pos1[1] != a:firstline
+            echohl ErrorMsg | echo "CommentRange: failed: firstline=" . a:firstline . " pos1=" . pos1[1] | echohl None
+            return
+        endif
+        if pos2[1] != a:lastline
+            echohl ErrorMsg | echo "CommentRange: failed: lastline=" . a:lastline . " pos2=" . pos2[1] | echohl None
+            return
         endif
 
-        call setpos(".", s:pos2)
-        let s:ml2 = searchpos(s:ecright, "cb", a:firstline)
-        if s:ml2[0] == a:firstline && s:ml2[1] < s:pos1[2]
-            let s:ml2 = [0,0]
+        let ecl = '\%' . pos1[2] . 'c'
+        let ecr = '\%' . (pos2[2]+1) . 'c'
+
+        let isincommentl = s:isincomment(pos1[1], pos1[2], ecl . ecleft)
+        let isincommentr = s:isincomment(pos2[1], pos2[2], ecright . ecr)
+
+        if !isincommentl
+            let cl = ''
+        else
+            let cl = cright
+        endif
+        if !isincommentr
+            let cr = ''
+        else
+            let cr = cleft
         endif
 
-        call setpos(".", s:pos1)
-        let s:mr1 = searchpos(s:ecleft, "c", a:lastline)
-        if s:mr1[0] == a:lastline && s:mr1[1] > s:pos2[2]
-            let s:mr1 = [0,0]
-        endif
-
-        call setpos(".", s:pos2)
-        let s:mr2 = searchpos(s:ecleft, "cb", a:firstline)
-        if s:mr2[0] == a:firstline && s:mr2[1] < s:pos1[2]
-            let s:mr2 = [0,0]
-        endif
-
-        let s:closeleft = ""
-        let s:closeright = ""
-        if s:ml1 != [0, 0] && s:mr1 != [0, 0]
-            if s:ml1[0] < s:mr1[0] || ( s:ml1[0] == s:mr1[0] && s:ml1[1] < s:mr1[1] )
-                let s:closeleft = s:cright
+        if a:firstline == a:lastline
+            let la = getline(a:firstline)
+            if pos1[2] >= 2
+                let ll = la[0 : pos1[2]-2]
+            else
+                let ll = ''
             endif
-            if s:ml2[0] < s:mr2[0] || ( s:ml2[0] == s:mr2[0] && s:ml2[1] < s:mr2[1] )
-                let s:closeright = s:cleft
+            let lc = la[pos1[2]-1 : pos2[2]-1]
+            let lr = la[pos2[2] : -1]
+
+            let lc = substitute(lc, '\(' . ecleft . '\|' . ecright . '\)', '', 'g')
+
+            call setline(a:firstline, ll . cl . lc . cr . lr)
+        else
+            let la = getline(a:firstline)
+            if pos1[2] >= 2
+                let ll = la[0 : pos1[2]-2]
+            else
+                let ll = ''
             endif
-        elseif s:ml1 != [0, 0] && s:mr1 == [0, 0]
-            let s:closeleft = s:cright
-        elseif s:ml1 == [0, 0] && s:mr1 != [0, 0]
-            let s:closeright = s:cleft
+            let lc = la[pos1[2]-1 : -1]
+
+            let lc = substitute(lc, '\(' . ecleft . '\|' . ecright . '\)', '', 'g')
+            call setline(a:firstline, ll . cl . lc)
+
+            for l in range(a:firstline+1, a:lastline-1)
+                call setline(l, substitute(getline(l), '\(' . ecleft . '\|' . ecright . '\)', '', 'g'))
+            endfor
+
+            let la = getline(a:lastline)
+            let lc = la[0 : pos2[2]-1]
+            let lr = la[pos2[2] : -1]
+
+            let lc = substitute(lc, '\(' . ecleft . '\|' . ecright . '\)', '', 'g')
+
+            call setline(a:lastline, lc . cr . lr)
+            return
         endif
-
-        let s:rcommand = "a\<CR>" . s:closeright
-
-        call setpos(".", s:pos2)
-        exec "normal " . s:rcommand
-
-        let s:lcommand = "i" . s:closeleft . "\<CR>"
-
-        call setpos(".", s:pos1)
-        exec "normal " . s:lcommand
-
-        exec (a:firstline + 1) . "," . (a:lastline + 1) . "s@" . s:ecright . s:ecleft . "@@ge"
-        exec (a:firstline + 1) . "," . (a:lastline + 1) . "s@\\(" . s:ecleft . "\\|" . s:ecright . "\\)@@ge"
-
-        exec ":" . a:firstline
-        exec "normal gJ"
-
-        exec ":" . a:lastline
-        exec "normal gJ"
-
     elseif len(b:line_comments) > 0
-        let s:cleft = b:line_comments . " "
-        for s:l in range(a:firstline, a:lastline)
-            let s:ecleft = escape(s:cleft, '*@\')
-
-            exec "s@^[[:space:]]*" . s:ecleft . "\\(.*\\)$@\\1@e"
+        for l in range(a:firstline, a:lastline)
+            setpos(l, 0)
+            call UnCommenLine()
         endfor
     endif
-    exec "setlocal report=". s:report_bk
-    if s:cindent_bk == 1
-        setlocal cindent
-    endif
-    if s:smartindent_bk == 1
-        setlocal smartindent
-    endif
-    if s:autoindent_bk == 1
-        setlocal autoindent
-    endif
-    exec "setlocal indentexpr=" . s:indentexpr_bk
-    exec "setlocal comments=" . escape(s:comments_bk, '* -\\|"')
 endfunction
 
 " Key mappings
