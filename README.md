@@ -33,8 +33,11 @@ e.g. in C/C++:
 
 ## Known issues
 
-* it only looks for comment delimiters within the selected region, therefore
-  it does not recognize when the region is strictly included within an already
-  commented region (vim syntax highlight should help you there, though)
+* in visual mode, it relies on syntax highlighting to detemine when the start and
+  end of the selection fall within an already commented region. This may fail if
+  the filetype plugin uses some weird names for highlighting regions, or when mixing
+  line and region comments (see below)
 * it happily mixes line comments and "region" comments; usage consistency is up
   to the user
+* untested on file types which I don't normally use.
+* some exotic commenting rules are not well supported, e.g. for Matlab files
