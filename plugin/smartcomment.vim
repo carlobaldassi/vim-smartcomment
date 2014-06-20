@@ -201,6 +201,8 @@ function! CommentRange() range
             return
         endif
 
+        let pos2[2] = min([pos2[2], len(getline(a:lastline))])
+
         let ecl = '\%' . pos1[2] . 'c'
         let ecr = '\%' . (pos2[2]+1) . 'c'
 
@@ -314,6 +316,8 @@ function! UnCommentRange() range
             echohl ErrorMsg | echo "CommentRange: failed: lastline=" . a:lastline . " pos2=" . pos2[1] | echohl None
             return
         endif
+
+        let pos2[2] = min([pos2[2], len(getline(a:lastline))])
 
         let ecl = '\%' . pos1[2] . 'c'
         let ecr = '\%' . (pos2[2]+1) . 'c'
