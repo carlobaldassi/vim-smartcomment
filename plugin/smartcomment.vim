@@ -161,7 +161,7 @@ function! s:isincomment(l, c, delim)
     if match(getline(a:l), a:delim) != -1
         return 0
     endif
-    let stack = synstack(a:l, a:c)
+    let stack = synstack(a:l, max([a:c,1]))
     for s in stack
         if synIDattr(s, 'name') =~? 'comment'
             return 1
@@ -201,7 +201,24 @@ function! CommentRange() range
             return
         endif
 
-        let pos2[2] = min([pos2[2], len(getline(a:lastline))])
+        let fa = getline(a:firstline)
+        let la = getline(a:lastline)
+
+        let pos2[2] = min([pos2[2], len(la)])
+
+        if a:firstline == a:lastline
+            if match(fa, '\%' . pos1[2] . 'c\s*\%' . (pos2[2]+1) . 'c') == -1
+                let pos1[2] = match(fa, '\%' . pos1[2] . 'c\s*\zs.*\%' . (pos2[2]+1) . 'c') + 1
+                let pos2[2] = match(la, '\%' . pos1[2] . 'c.*\zs\s*\%' . (pos2[2]+1) . 'c')
+            endif
+        else
+            if match(fa, '\%' . pos1[2] . 'c\s*$') == -1
+                let pos1[2] = match(fa, '\%' . pos1[2] . 'c\s*\zs') + 1
+            endif
+            if match(la, '^\s*\%' . (pos2[2]+1) . 'c') == -1
+                let pos2[2] = match(la, '\s*\%' . (pos2[2]+1) . 'c')
+            end
+        endif
 
         let ecl = '\%' . pos1[2] . 'c'
         let ecr = '\%' . (pos2[2]+1) . 'c'
@@ -250,7 +267,11 @@ function! CommentRange() range
             endfor
 
             let la = getline(a:lastline)
-            let lc = la[0 : pos2[2]-1]
+            if pos2[2] > 0
+                let lc = la[0 : pos2[2]-1]
+            else
+                let lc = ''
+            endif
             let lr = la[pos2[2] : -1]
 
             let lc = substitute(lc, '\(' . ecleft . '\|' . ecright . '\)', cright . cleft, 'g')
