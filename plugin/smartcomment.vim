@@ -116,8 +116,9 @@ function! SmartComment(mode) range
     if len(b:line_comments) == 0 && len(b:range_comments) == 0
         return
     end
+    let force_linemode = a:mode == "visual" && get(b:, "smartcomment_force_linemode", 0) && visualmode() == "V"
     let save_cur = getpos('.')
-    if a:mode == "normal" || len(b:range_comments) == 0 || len(b:range_comments[1]) == 0
+    if a:mode == "normal" || force_linemode || len(b:range_comments) == 0 || len(b:range_comments[1]) == 0
         exec a:firstline . "," . a:lastline . "call CommentLine()"
     elseif a:mode == "visual"
         exec a:firstline . "," . a:lastline . "call CommentRange()"
@@ -130,8 +131,9 @@ function! SmartUnComment(mode) range
     if len(b:line_comments) == 0 && len(b:range_comments) == 0
         return
     end
+    let force_linemode = a:mode == "visual" && get(b:, "smartcomment_force_linemode", 0) && visualmode() == "V"
     let save_cur = getpos('.')
-    if a:mode == "normal" || len(b:range_comments) == 0 || len(b:range_comments[1]) == 0
+    if a:mode == "normal" || force_linemode || len(b:range_comments) == 0 || len(b:range_comments[1]) == 0
         exec a:firstline . "," . a:lastline . "call UnCommentLine()"
     elseif a:mode == "visual"
         exec a:firstline . "," . a:lastline . "call UnCommentRange()"
@@ -140,7 +142,7 @@ function! SmartUnComment(mode) range
     return ''
 endfunction
 
-function! CommentLine()
+function! CommentLine() range
     if &modifiable == 0
         echohl WarningMsg | echo "CommentLine: failed: file is read-only" | echohl None
         return
@@ -154,7 +156,31 @@ function! CommentLine()
         let cleft = b:range_comments[0]
         let cright = b:range_comments[1]
     endif
-    call setline('.', substitute(getline('.'), '^\(\s*\)\(.*\)\(\s*\)$', '\1' . cleft . '\2' . cright . '\3', ''))
+    let rspace = cright == "" ? "" : " "
+    let leading_s = 1000
+    for line in range(a:firstline, a:lastline)
+        call setpos('.', [0, line, 1, 0])
+        if match(getline('.'), '\S') == -1
+            continue
+        endif
+        normal ^
+        let leading_s = min([leading_s, getpos('.')[2]])
+    endfor
+    if leading_s == 1000
+        let leading_s = 1
+    endif
+    for line in range(a:firstline, a:lastline)
+        call setpos('.', [0, line, leading_s, 0])
+        if match(getline('.'), '\S') == -1
+            call setline('.', repeat(' ', leading_s - 1) . cleft . (cright != '' ? ' ' . cright : ''))
+            continue
+        endif
+        exec 'normal! i' . cleft . " \<Esc>"
+        if cright != ""
+            exec 'normal! A ' . cright . "\<Esc>"
+        endif
+        "call setline('.', substitute(getline('.'), '^\(\s*\)\(.*\)\(\s*\)$', '\1' . cleft . '\2' . cright . '\3', ''))
+    endfor
 endfunction
 
 function! s:isincomment(l, c, delim)
@@ -302,10 +328,17 @@ function! UnCommentLine()
         let cright = b:range_comments[1]
     endif
 
-    let ecleft = escape(cleft, '*\.^$')
+    let ecleft = escape(cleft, '*\.^$') . '\s\?'
     let ecright = escape(cright, '*\.^$')
-
-    call setline('.', substitute(getline('.'), '^\(\s*\)' . ecleft . '\(.*\)\s*' . ecright . '\(\s*\)$', '\1\2\3', ''))
+    if ecright != ""
+        let ecright = '\s\?' . ecright
+    endif
+    let curline = getline('.')
+    if match(curline, '^\s*' . ecleft . '\s*' . ecright . '\s*$') != -1
+        call setline('.', '')
+    else
+        call setline('.', substitute(curline, '^\(\s*\)' . ecleft . '\(.*\)\s*' . ecright . '\(\s*\)$', '\1\2\3', ''))
+    endif
 endfunction
 
 function! UnCommentRange() range
