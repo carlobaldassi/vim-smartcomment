@@ -23,7 +23,7 @@ function! GetCommentsData()
         let s:cright = substitute(&commentstring, "^.*%s", "", "")
         let b:range_comments = [s:cleft, s:cright]
         if len(s:cright) == 0
-            let b:line_comments = s:cleft
+            let b:line_comments = substitute(s:cleft, '\s*$', '', '')
         endif
     endif
     if exists('&comments')
@@ -75,7 +75,7 @@ function! GetCommentsData()
             else
                 let s:type = "line"
                 if len(b:line_comments) == 0
-                    let b:line_comments = s:ctok
+                    let b:line_comments = substitute(s:ctok, '\s*$', '', '')
                 end
             endif
         endfor
